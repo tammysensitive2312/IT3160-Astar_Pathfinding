@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Interactive Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            height: 100vh;
+            width: 100vw;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        var map = L.map('map').setView([21.028511, 105.804817], 13);
+        var sourceMarker, destinationMarker;
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        map.on('click', function(e) {
+            if (!sourceMarker) {
+                sourceMarker = L.marker([e.latlng.lat, e.latlng.lng], {
+                    draggable: true,
+                    title: "Source"
+                }).addTo(map);
+                sourceMarker.bindPopup("Source: " + e.latlng.toString()).openPopup();
+            } else if (!destinationMarker) {
+                destinationMarker = L.marker([e.latlng.lat, e.latlng.lng], {
+                    draggable: true,
+                    title: "Destination"
+                }).addTo(map);
+                destinationMarker.bindPopup("Destination: " + e.latlng.toString()).openPopup();
+            }
+        });
+
+        document.addEventListener('keydown', function(event) {
+            if (event.key === "Enter" && sourceMarker && destinationMarker) {
+                callAPI(sourceMarker.getLatLng(), destinationMarker.getLatLng());
+            }
+        });
+
+        function callAPI(source, destination) {
+            var url = `/calculate?pntdata=${source.lat},${source.lng},${destination.lat},${destination.lng}`;
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    console.log(data);
+                    drawPath(data);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function drawPath(data) {
+            var latlngs = data.map(function(point) {
+                return [point.lat, point.lng];
+            });
+            var polyline = L.polyline(latlngs, {color: 'red'}).addTo(map);
+            map.fitBounds(polyline.getBounds());
+        }
+
+
+    </script>
+</body>
+</html>

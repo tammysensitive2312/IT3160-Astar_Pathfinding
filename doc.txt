@@ -1,0 +1,93 @@
+Bài toán: xây dựng giải thuật định tuyến, tìm đường đi tốt nhất giữa 2 điểm trên bản đồ thế giới
+Môi trường: Pycharm, xây dựng dưới dạng một ứng dụng web với back-end sử dụng thư viện python flask và front-end
+sử dụng leaflet js hiển thị bản đồ của openstreetmap
+data: lấy từ openstreetmap, sử dụng thư viện osmnx để trích xuất dữ liệu bản đồ và chuyển về dưới dạng file đồ thị:
+đoạn code:
+    def download_graph(self):
+        """Download the street network graph of the city using OSMnx."""
+        self.graph = ox.graph_from_address(self.city_name, network_type='drive', simplify=True)
+
+Bài toán:
++ đầu vào: gồm kinh độ và vĩ độ của điểm đầu và điểm đích. Ví dụ:
+var points = [
+            [21.021437558096444,105.81565618515016],
+            [21.023852398138455,105.81642866134644],
+        ];
+
+        được truyền qua API để gửi về server
+
++ tiếp theo: vì có thể có trường hợp 2 điểm do người dùng chọn không có trong file đồ thị, nên ta sẽ xây dựng một hàm để
+tìm 3 điểm lân cận với từng node nguồn và node đích bằng hàm sau:
+
+def get_KNN(point_location):
+    nodes = doc["graphml"]["graph"]["node"]
+    locations = []
+    for eachNode in range(len(nodes)):
+        locations.append((nodes[eachNode]["data"][0]["#text"], nodes[eachNode]["data"][1]["#text"]))
+
+    locations_arr = np.asarray(locations, dtype=np.float32)
+    point = np.asarray(point_location, dtype=np.float32)
+
+    tree = KDTree(locations_arr, leaf_size=2)
+    dist, ind = tree.query(point.reshape(1, -1), k=3)
+
+    nearest_neighbour_loc = (float(locations[ind[0][0]][0]), float(locations[ind[0][0]][1]))
+
+    return nearest_neighbour_loc
+
+tree = KDTree(locations_arr, leaf_size=2): Tạo một cây KD-Tree từ mảng tọa độ. leaf_size là tham số
+điều chỉnh hiệu suất của cây, thường nằm trong khoảng từ 10 đến 40, tùy thuộc vào số lượng dữ liệu.
+
+dist, ind = tree.query(point.reshape(1, -1), k=3): Sử dụng cây KD-Tree để tìm k (trong trường hợp này là 3) láng giềng gần nhất với điểm đã cho.
+Hàm này trả về khoảng cách (dist) và chỉ số (ind) của các láng giềng trong mảng tọa độ ban đầu.
+
++ giải thuật chính: hàm hreustics
+  Khởi tạo các danh sách và từ điển
+open_list = [] : một danh sách chứa các node liền kề với node hiện tại đang được xét và có thể đi đến
+g_values = {}: từ điển chứa giá trị g phục vụ tính hàm hreustic, giá trị ban đầu sẽ bằng 0
+path = {}: Từ điển chứa thông tin về đường đi, bao gồm điểm cha và chi phí để tới điểm hiện tại từ điểm cha
+closed_list = {}: Từ điển chứa các node đã được kiểm tra
+
+h_source = cj.calculate_heuristic(source, destination): Tính giá trị ước lượng h từ điểm hiện tại đang xét đến điểm đích.
+
+  Thêm điểm xuất phát vào danh sách mở
+open_list.append((h_source, source_id)): Thêm điểm xuất phát vào danh sách mở với giá trị f là h.
+
+  Bắt đầu vòng lặp tìm kiếm
+s = time.time(): tính thời gian tìm đường phục vụ cho việc đánh giá thời gian khả năng tìm kiếm
+while len(open_list) > 0: Lặp lại cho đến khi danh sách mở rỗng.
+
+  Lấy trạng thái hiện tại và loại bỏ khỏi danh sách mở
+curr_state = open_list[0][1]: Lấy id của node hiện tại (đầu tiên trong danh sách mở).
+heap.heappop(open_list): Loại bỏ node hiện tại khỏi danh sách mở.
+closed_list[curr_state] = "": Thêm node hiện tại vào danh sách đóng.
+  Kiểm tra nếu đã đến đích
+if curr_state == dest_id: Nếu id hiện tại là id điểm đích:
+print("We have reached to the goal"): In ra thông báo đã đến đích.
+print("Final path:", path): In ra đường đi cuối cùng.
+
+  Lấy và kiểm tra các láng giềng của node hiện tại
+nbrs = cj.get_neighbours(curr_state, destination): Lấy các node láng giềng của node hiện tại.
+values = nbrs[curr_state]: Lấy giá trị của các láng giềng.
+  Duyệt qua từng láng giềng
+for eachNeighbour in values:
+neighbour_id, neighbour_heuristic, neighbour_cost, neighbour_lat_lon = cj.get_neighbour_info(eachNeighbour): Lấy thông tin về láng giềng.
+current_inherited_cost = g_values[curr_state] + neighbour_cost: Tính chi phí g từ điểm xuất phát đến láng giềng qua node hiện tại.
+  Kiểm tra và cập nhật giá trị cho láng giềng
+if neighbour_id in closed_list: Nếu láng giềng đã nằm trong danh sách đóng, bỏ qua.
+
+else: Nếu không:
+
+g_values[neighbour_id] = current_inherited_cost: Cập nhật giá trị g cho node láng giềng.
+neighbour_fvalue = neighbour_heuristic + current_inherited_cost: Tính giá trị f cho láng giềng.
+open_list.append((neighbour_fvalue, neighbour_id)): Thêm node lân cận vào danh sách mở.
+path[str(neighbour_lat_lon)] = {"parent": str(cj.getLatLon(curr_state)), "cost": neighbour_cost}: Cập nhật thông tin đường đi cho láng giềng trong từ điển path.
+
+print("Current path update:", path): In ra thông tin cập nhật đường đi.
+
+open_list = list(set(open_list)): Loại bỏ các phần tử trùng lặp trong danh sách mở.
+heap.heapify(open_list): Cấu trúc lại danh sách mở dưới dạng heap.
+
+
+
+
